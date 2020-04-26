@@ -14,6 +14,14 @@
 #define FAIL    -1
 #define CA_CERT "ca.crt"
 
+// right certificate
+#define CLIENT_CERT "client.crt"
+#define CLIENT_KEY "client.key"
+
+// wrong certificate
+// #define CLIENT_CERT "wrong.crt"
+// #define CLIENT_KEY "wrong.key"
+
 int OpenConnection(const char *hostname, int port)
 {   
     int sd;
@@ -58,6 +66,26 @@ SSL_CTX* InitCTX(void)
     return ctx;
 }
 
+// 配置 SSL context
+void configure_context(SSL_CTX *ctx)
+{
+    SSL_CTX_set_ecdh_auto(ctx, 1);  // 選擇橢圓曲線
+
+    /* Set the key and cert */
+    if (SSL_CTX_use_certificate_file(ctx, CLIENT_CERT, SSL_FILETYPE_PEM) <= 0) {
+        ERR_print_errors_fp(stderr);
+	exit(EXIT_FAILURE);
+    }
+
+    if (SSL_CTX_use_PrivateKey_file(ctx, CLIENT_KEY, SSL_FILETYPE_PEM) <= 0 ) {
+        ERR_print_errors_fp(stderr);
+	exit(EXIT_FAILURE);
+    }
+    SSL_CTX_load_verify_locations(ctx, CA_CERT, NULL);
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+
+}
+
 void ShowCerts(SSL* ssl)
 {   
     X509 *cert; // Certificate display and signing utility
@@ -77,81 +105,6 @@ void ShowCerts(SSL* ssl)
     }
     else
         printf("Info: No server certificates configured.\n");
-}
-
-long test(SSL_CTX* ctx, SSL* ssl)
-{
-    SSL_CTX_load_verify_locations(ctx, "ca.crt", NULL);
-    SSL_set_verify(ssl, SSL_VERIFY_PEER, NULL);
-    long result = SSL_get_verify_result(ssl);
-    // if (result == X509_V_OK)
-    //     return 1;
-    // else
-    //     return -1;
-    return result;
-}
-
-void test2(SSL* ssl)
-{
-    X509 *cert;
-    cert = SSL_get_peer_certificate(ssl);
-    if ( cert != NULL )
-    {
-        // X509_STORE_CTX * s_ctx = X509_STORE_CTX_new();
-        // X509_STORE_CTX_set_chain
-        // X509_STORE_CTX_trusted_stack
-        // X509_STORE_CTX_set_cert(s_ctx, cert);
-        // X509_verify_cert
-
-        int status;
-        X509_STORE_CTX *ctx;
-        ctx = X509_STORE_CTX_new();
-        X509_STORE *store = X509_STORE_new();
-
-        X509_STORE_add_cert(store, cert);
-
-        X509_STORE_CTX_init(ctx, store, cert, NULL);
-
-        status = X509_verify_cert(ctx);
-        if(status == 1)
-            printf("Certificate verified ok\n");
-        else
-            printf("%s\n", X509_verify_cert_error_string(ctx->error));
-    }
-    else
-        printf("Info: No server certificates configured.\n");
-}
-
-int verify(SSL* ssl)
-{
-    X509 *cert;
-    cert = SSL_get_peer_certificate(ssl);
-    int result = 0;
-
-    X509_STORE* m_store = X509_STORE_new();
-    X509_LOOKUP* m_lookup = X509_STORE_add_lookup(m_store,X509_LOOKUP_file());    
-    X509_STORE_load_locations(m_store, CA_CERT, NULL);
-    X509_STORE_set_default_paths(m_store);
-    X509_LOOKUP_load_file(m_lookup,CA_CERT,X509_FILETYPE_PEM);
-
-    X509_STORE_CTX *storeCtx = X509_STORE_CTX_new();
-    X509_STORE_CTX_init(storeCtx,m_store,cert,NULL);
-    X509_STORE_CTX_set_flags(storeCtx, X509_V_FLAG_CB_ISSUER_CHECK);
-    if (X509_verify_cert(storeCtx) == 1)
-    {
-        printf("Verification success!!\n");
-        result = 1;
-    }
-    else
-        printf("Verification error: %s\n",X509_verify_cert_error_string(storeCtx->error));
-    
-    X509_STORE_CTX_free(storeCtx);
-    if(m_store != NULL)
-    {
-        X509_STORE_free(m_store);
-        m_store = NULL;
-    }
-    return result;
 }
 
 int main(int argc, char *argv[])
@@ -176,23 +129,34 @@ int main(int argc, char *argv[])
     while (1)
     {
         ctx = InitCTX();
+        configure_context(ctx);
         server = OpenConnection(hostname, atoi(port));
         ssl = SSL_new(ctx);      /* create new SSL connection state */
+        SSL_set_verify_depth(ssl, 1);
         SSL_set_fd(ssl, server);    /* attach the socket descriptor */
-        if ( SSL_connect(ssl) == FAIL )   /* perform the connection */
-            ERR_print_errors_fp(stderr);
+        if (SSL_connect(ssl) == FAIL)   /* perform the connection */
+        {
+            if (SSL_get_verify_result(ssl) != X509_V_OK)
+            {
+                fprintf(stderr, "Server certificate verify error\n");
+                printf("Connection close\n");
+                exit(EXIT_FAILURE);
+            }
+        }
         else
         {   
             char *msg;
+            printf("Verification success!!\n");
             printf("Connected with %s encryption\n", SSL_get_cipher(ssl));
             ShowCerts(ssl);        /* get any certificates */
 
             // long t = test(ctx, ssl);
             // printf("t = %d\n", t);
-            if (verify(ssl) != 1)
-                return -1;
+            // if (verify(ssl) != 1)
+            //     return -1;
 
             // read from STDIN and send to server
+            printf("Send some to server: ");
             scanf("%s", msg);
             SSL_write(ssl, msg, strlen(msg));   /* encrypt & send message */
             
@@ -200,7 +164,7 @@ int main(int argc, char *argv[])
             bytes = SSL_read(ssl, buf, sizeof(buf)); /* get reply & decrypt */
             buf[bytes] = 0;
             printf("Received from server:\n");
-            printf("\{ %s \}\n\n", buf);
+            printf("%s\n\n", buf);
             
             SSL_free(ssl);        /* release connection state */
         }

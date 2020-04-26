@@ -6,6 +6,16 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#define CA_CERT "ca.crt"
+
+// right certificate
+#define HOST_CERT "host.crt"
+#define HOST_KEY "host.key"
+
+// wrong certificate
+// #define HOST_CERT "wrong.crt"
+// #define HOST_KEY "wrong.key"
+
 int create_socket(int port)
 {
     int s;
@@ -53,7 +63,7 @@ SSL_CTX *create_context()
     const SSL_METHOD *method;
     SSL_CTX *ctx;
 
-    method = SSLv23_server_method();    // create 的方法
+    method = TLSv1_2_server_method();    // create 的方法
 
     ctx = SSL_CTX_new(method);
     if (!ctx) {
@@ -68,18 +78,41 @@ SSL_CTX *create_context()
 // 配置 SSL context
 void configure_context(SSL_CTX *ctx)
 {
-    SSL_CTX_set_ecdh_auto(ctx, 1);  // 選擇橢圓取縣
+    SSL_CTX_set_ecdh_auto(ctx, 1);  // 選擇橢圓曲線
 
     /* Set the key and cert */
-    if (SSL_CTX_use_certificate_file(ctx, "host.crt", SSL_FILETYPE_PEM) <= 0) {
+    if (SSL_CTX_use_certificate_file(ctx, HOST_CERT, SSL_FILETYPE_PEM) <= 0) {
         ERR_print_errors_fp(stderr);
 	exit(EXIT_FAILURE);
     }
 
-    if (SSL_CTX_use_PrivateKey_file(ctx, "host.key", SSL_FILETYPE_PEM) <= 0 ) {
+    if (SSL_CTX_use_PrivateKey_file(ctx, HOST_KEY, SSL_FILETYPE_PEM) <= 0 ) {
         ERR_print_errors_fp(stderr);
 	exit(EXIT_FAILURE);
     }
+    SSL_CTX_load_verify_locations(ctx, CA_CERT, NULL);
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+}
+
+void ShowCerts(SSL* ssl)
+{   
+    X509 *cert; // Certificate display and signing utility
+    char *line;
+
+    cert = SSL_get_peer_certificate(ssl); /* get the server's certificate */
+    if ( cert != NULL )
+    {
+        printf("Client certificates:\n");
+        line = X509_NAME_oneline(X509_get_subject_name(cert), 0, 0);
+        printf("Subject: %s\n", line);
+        free(line);       /* free the malloc'ed string */
+        line = X509_NAME_oneline(X509_get_issuer_name(cert), 0, 0);
+        printf("Issuer: %s\n", line);
+        free(line);       /* free the malloc'ed string */
+        X509_free(cert);     /* free the malloc'ed certificate copy */
+    }
+    else
+        printf("Info: No client certificates configured.\n");
 }
 
 int main(int argc, char **argv)
@@ -102,7 +135,7 @@ int main(int argc, char **argv)
         struct sockaddr_in addr;
         uint len = sizeof(addr);
         SSL *ssl;
-        const char reply[] = "WTF";
+        char *reply;
         char buf[1024];
         int count;
 
@@ -114,20 +147,42 @@ int main(int argc, char **argv)
 
         ssl = SSL_new(ctx);
         SSL_set_fd(ssl, client);    // 配對 SSL 跟新的連線 fd
+        SSL_set_verify_depth(ssl, 1);
+
 
         // SSL_accept() 處理 TSL handshake
         if (SSL_accept(ssl) <= 0) {
-            ERR_print_errors_fp(stderr);
+            if (SSL_get_verify_result(ssl) != X509_V_OK)
+            {
+                fprintf(stderr, "Client certificate verify error\n");
+                printf("Connection close\n");
+                // exit(EXIT_FAILURE);
+            }
+            else
+            {
+                fprintf(stderr, "Other connection error\n");
+                printf("Connection close\n");
+            }
+            SSL_shutdown(ssl);
+            SSL_free(ssl);
+            close(client);
+            exit(EXIT_FAILURE);
         }
         else {
             printf("get connect!!\n");
+            printf("Verification success!!\n");
+            ShowCerts(ssl);        /* get any certificates */
 
             // send to client
+            printf("Send some to client: ");
+            scanf("%s", reply);
             SSL_write(ssl, reply, strlen(reply));   // 送出訊息
+
+
             count = SSL_read(ssl, buf, sizeof(buf));
             buf[count] = 0;
             printf("Received from client:\n");
-            printf("\{ %s \}\n\n", buf);
+            printf("%s\n\n", buf);
         }
 
         SSL_shutdown(ssl);
