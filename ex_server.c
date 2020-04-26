@@ -71,12 +71,12 @@ void configure_context(SSL_CTX *ctx)
     SSL_CTX_set_ecdh_auto(ctx, 1);  // 選擇橢圓取縣
 
     /* Set the key and cert */
-    if (SSL_CTX_use_certificate_file(ctx, "cert.pem", SSL_FILETYPE_PEM) <= 0) {
+    if (SSL_CTX_use_certificate_file(ctx, "host.crt", SSL_FILETYPE_PEM) <= 0) {
         ERR_print_errors_fp(stderr);
 	exit(EXIT_FAILURE);
     }
 
-    if (SSL_CTX_use_PrivateKey_file(ctx, "key.pem", SSL_FILETYPE_PEM) <= 0 ) {
+    if (SSL_CTX_use_PrivateKey_file(ctx, "host.key", SSL_FILETYPE_PEM) <= 0 ) {
         ERR_print_errors_fp(stderr);
 	exit(EXIT_FAILURE);
     }
@@ -84,32 +84,29 @@ void configure_context(SSL_CTX *ctx)
 
 int main(int argc, char **argv)
 {
-    // setvbuf(stdout, NULL, _IONBF, 0);
-
-
+    setvbuf(stdout, NULL, _IONBF, 0);   // 把 STDOUT buffer 拿掉
     int sock;
     SSL_CTX *ctx;
 
     // 初始化 openssl
-    init_openssl();
-    // SSL_library_init();
+    // init_openssl();
+    SSL_library_init();
     ctx = create_context();
 
     configure_context(ctx);
 
-    sock = create_socket(4433);
+    sock = create_socket(8787);
 
     /* Handle connections */
     while(1) {
         struct sockaddr_in addr;
         uint len = sizeof(addr);
         SSL *ssl;
-        const char reply[] = "WTF\n";
+        const char reply[] = "WTF";
         char buf[1024];
         int count;
 
         int client = accept(sock, (struct sockaddr*)&addr, &len);
-        printf("socket accept\n");
         if (client < 0) {
             perror("Unable to accept");
             exit(EXIT_FAILURE);
@@ -124,10 +121,13 @@ int main(int argc, char **argv)
         }
         else {
             printf("get connect!!\n");
+
+            // send to client
             SSL_write(ssl, reply, strlen(reply));   // 送出訊息
             count = SSL_read(ssl, buf, sizeof(buf));
             buf[count] = 0;
-            printf("Received from client: \"%s\"", buf);
+            printf("Received from client:\n");
+            printf("\{ %s \}\n\n", buf);
         }
 
         SSL_shutdown(ssl);

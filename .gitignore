@@ -2,4 +2,7 @@ ex_server
 ex_client
 *.key
 *.pem
+*.crt
+*.csr
+ca*
 .vscode/
