@@ -136,7 +136,7 @@ int main(int argc, char **argv)
         uint len = sizeof(addr);
         SSL *ssl;
         char *reply;
-        char buf[1024];
+        char receive[1024];
         int count;
 
         int client = accept(sock, (struct sockaddr*)&addr, &len);
@@ -174,15 +174,37 @@ int main(int argc, char **argv)
             ShowCerts(ssl);        /* get any certificates */
 
             // send to client
-            printf("Send some to client: ");
-            scanf("%s", reply);
-            SSL_write(ssl, reply, strlen(reply));   // 送出訊息
+            // printf("Send some to client: ");
+            // scanf("%s", reply);
+            // SSL_write(ssl, reply, strlen(reply));   // 送出訊息
 
-
-            count = SSL_read(ssl, buf, sizeof(buf));
-            buf[count] = 0;
+            count = SSL_read(ssl, receive, sizeof(receive));
+            receive[count] = 0;
             printf("Received from client:\n");
-            printf("%s\n\n", buf);
+            printf("%s\n\n", receive);
+
+            if (strcmp(receive, "copy_file") == 0)
+            {
+                reply = "choise a file to copy\n";
+                SSL_write(ssl, reply, strlen(reply));   // 送出訊息
+                FILE *fp;
+                if ((fp = popen("ls -al", "r")) == NULL)
+                {
+                    perror("open failed!");
+                    return -1;
+                }
+                char buf[256];
+                while (fgets(buf, 255, fp) != NULL)
+                {
+                    // printf("%s", buf);
+                    SSL_write(ssl, buf, strlen(buf));
+                }
+                if (pclose(fp) == -1)
+                {
+                    perror("close failed!");
+                    return -2;
+                }
+            }
         }
 
         SSL_shutdown(ssl);

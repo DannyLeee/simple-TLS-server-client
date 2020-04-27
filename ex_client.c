@@ -150,21 +150,18 @@ int main(int argc, char *argv[])
             printf("Connected with %s encryption\n", SSL_get_cipher(ssl));
             ShowCerts(ssl);        /* get any certificates */
 
-            // long t = test(ctx, ssl);
-            // printf("t = %d\n", t);
-            // if (verify(ssl) != 1)
-            //     return -1;
-
             // read from STDIN and send to server
             printf("Send some to server: ");
             scanf("%s", msg);
             SSL_write(ssl, msg, strlen(msg));   /* encrypt & send message */
             
             // read from server and print to STDOUT
-            bytes = SSL_read(ssl, buf, sizeof(buf)); /* get reply & decrypt */
-            buf[bytes] = 0;
             printf("Received from server:\n");
-            printf("%s\n\n", buf);
+            while ((bytes = SSL_read(ssl, buf, sizeof(buf))) != 0) /* get reply & decrypt */
+            {
+                buf[bytes] = 0;
+                printf("%s", buf);
+            }
             
             SSL_free(ssl);        /* release connection state */
         }
