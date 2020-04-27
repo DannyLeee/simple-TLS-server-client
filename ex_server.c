@@ -138,6 +138,7 @@ int main(int argc, char **argv)
         char *reply;
         char receive[1024];
         int count;
+        FILE *fp;
 
         int client = accept(sock, (struct sockaddr*)&addr, &len);
         if (client < 0) {
@@ -183,12 +184,11 @@ int main(int argc, char **argv)
             printf("Received from client:\n");
             printf("%s\n\n", receive);
 
-            if (strcmp(receive, "copy_file") == 0)
+            if (strcmp(receive, "list_file") == 0)
             {
                 reply = "choise a file to copy\n";
                 SSL_write(ssl, reply, strlen(reply));   // 送出訊息
-                FILE *fp;
-                if ((fp = popen("ls -al", "r")) == NULL)
+                if ((fp = popen("ls | cat", "r")) == NULL)
                 {
                     perror("open failed!");
                     return -1;
@@ -199,11 +199,31 @@ int main(int argc, char **argv)
                     // printf("%s", buf);
                     SSL_write(ssl, buf, strlen(buf));
                 }
+                printf("ls done\n");
                 if (pclose(fp) == -1)
                 {
                     perror("close failed!");
                     return -2;
+                }              
+            }
+            else if (strncmp(receive, "copy_file", 9) == 0)
+            {
+                char *file_name = strtok(receive, " ");
+                puts(file_name);
+                file_name = strtok(NULL, " ");
+                puts(file_name);
+
+                if ((fp = fopen(file_name, "rb")) == NULL)
+                {
+                    perror("File opening failed");
+                    // return -1;
                 }
+                int c; // note: int, not char, required to handle EOF
+                printf("Copying file: %s ... ...\n", file_name);
+                while ((c = fgetc(fp)) != EOF) { // standard C I/O file reading loop
+                    SSL_write(ssl, c, sizeof(c));
+                }
+                printf("File copy complete");
             }
         }
 
@@ -214,5 +234,5 @@ int main(int argc, char **argv)
 
     close(sock);
     SSL_CTX_free(ctx);
-    cleanup_openssl();
+    cleanup_openssl();/****/
 }

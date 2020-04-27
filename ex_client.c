@@ -54,8 +54,8 @@ SSL_CTX* InitCTX(void)
     const SSL_METHOD *method;
     SSL_CTX *ctx;
 
-    OpenSSL_add_all_algorithms();  /* Load cryptos, et.al. */
-    SSL_load_error_strings();   /* Bring in and register error messages */
+    OpenSSL_add_all_algorithms();  /* Load cryptos, et.al. */ /***/
+    SSL_load_error_strings();   /* Bring in and register error messages */ /***/
     method = TLSv1_2_client_method();  /* Create new client-method instance */
     ctx = SSL_CTX_new(method);   /* Create new context */
     if ( ctx == NULL )
@@ -153,16 +153,38 @@ int main(int argc, char *argv[])
             // read from STDIN and send to server
             printf("Send some to server: ");
             scanf("%s", msg);
-            SSL_write(ssl, msg, strlen(msg));   /* encrypt & send message */
-            
-            // read from server and print to STDOUT
-            printf("Received from server:\n");
-            while ((bytes = SSL_read(ssl, buf, sizeof(buf))) != 0) /* get reply & decrypt */
+            if (strcmp(msg, "copy_file") == 0)
             {
-                buf[bytes] = 0;
-                printf("%s", buf);
+                scanf("%s", msg);
+                char file_name = msg;
+                char com = "copy_file";
+                strcat(com, file_name);
+                SSL_write(ssl, com, strlen(com));   /* encrypt & send message */
+
+                strcat(file_name, ".copy");
+                FILE * fp = fopen(file_name,"wb");
+                while ((bytes = SSL_read(ssl, buf, sizeof(buf))) != 0) /* get reply & decrypt */
+                {
+                    buf[bytes] = 0;
+                    fputc(buf, fp);
+                }
             }
-            
+            else
+            {
+                
+                SSL_write(ssl, msg, strlen(msg));   /* encrypt & send message */
+                // read from server and print to STDOUT
+                printf("Received from server:\n");
+                while ((bytes = SSL_read(ssl, buf, sizeof(buf))) != 0) /* get reply & decrypt */
+                // bytes = SSL_read(ssl, buf, sizeof(buf));
+                // while (bytes != 0) /* get reply & decrypt */
+                {
+                    buf[bytes] = 0;
+                    printf("%s", buf);
+                    // bytes = SSL_read(ssl, buf, sizeof(buf));
+                }
+            }
+
             SSL_free(ssl);        /* release connection state */
         }
         close(server);         /* close socket */
