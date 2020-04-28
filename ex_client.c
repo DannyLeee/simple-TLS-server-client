@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
     SSL_CTX *ctx;
     int server;
     SSL *ssl;
-    char buf[1024];
+    char receive[1024];
     int bytes;
     char *hostname, *port;
 
@@ -152,39 +152,33 @@ int main(int argc, char *argv[])
 
             // read from STDIN and send to server
             printf("Send some to server: ");
-            scanf("%s", msg);
-            if (strcmp(msg, "copy_file") == 0)
+            gets(msg);                
+            SSL_write(ssl, msg, strlen(msg));   /* encrypt & send message */
+            // read from server and print to STDOUT
+            printf("Received from server:\n");
+            while ((bytes = SSL_read(ssl, receive, sizeof(receive))) != 0) /* get reply & decrypt */
             {
-                scanf("%s", msg);
-                char file_name = msg;
-                char com = "copy_file";
-                strcat(com, file_name);
-                SSL_write(ssl, com, strlen(com));   /* encrypt & send message */
-
-                strcat(file_name, ".copy");
-                FILE * fp = fopen(file_name,"wb");
-                while ((bytes = SSL_read(ssl, buf, sizeof(buf))) != 0) /* get reply & decrypt */
+                receive[bytes] = 0;
+                if (strncmp(receive, "Copying_file", 12) == 0)
                 {
-                    buf[bytes] = 0;
-                    fputc(buf, fp);
+                    char *file_name = strtok(receive, " ");
+                    file_name = strtok(NULL, " ");
+                    strcat(file_name, "_copy");
+
+                    FILE *fp = fopen(file_name,"wb");
+                    while ((bytes = SSL_read(ssl, receive, sizeof(receive))) != 0) /* get reply & decrypt */
+                    {
+                        receive[bytes] = 0;
+                        fwrite(receive, strlen(receive), 1, fp);
+                    }   
+                    fclose(fp);
+                }
+                else
+                {
+                    printf("%s", receive);
                 }
             }
-            else
-            {
-                
-                SSL_write(ssl, msg, strlen(msg));   /* encrypt & send message */
-                // read from server and print to STDOUT
-                printf("Received from server:\n");
-                while ((bytes = SSL_read(ssl, buf, sizeof(buf))) != 0) /* get reply & decrypt */
-                // bytes = SSL_read(ssl, buf, sizeof(buf));
-                // while (bytes != 0) /* get reply & decrypt */
-                {
-                    buf[bytes] = 0;
-                    printf("%s", buf);
-                    // bytes = SSL_read(ssl, buf, sizeof(buf));
-                }
-            }
-
+            printf("\n");
             SSL_free(ssl);        /* release connection state */
         }
         close(server);         /* close socket */

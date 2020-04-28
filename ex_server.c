@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -131,7 +132,8 @@ int main(int argc, char **argv)
     sock = create_socket(8787);
 
     /* Handle connections */
-    while(1) {
+    while(1) 
+    {
         struct sockaddr_in addr;
         uint len = sizeof(addr);
         SSL *ssl;
@@ -209,21 +211,31 @@ int main(int argc, char **argv)
             else if (strncmp(receive, "copy_file", 9) == 0)
             {
                 char *file_name = strtok(receive, " ");
-                puts(file_name);
                 file_name = strtok(NULL, " ");
-                puts(file_name);
 
                 if ((fp = fopen(file_name, "rb")) == NULL)
                 {
                     perror("File opening failed");
-                    // return -1;
+                    return -1;
                 }
-                int c; // note: int, not char, required to handle EOF
+                // unsigned char *c;
                 printf("Copying file: %s ... ...\n", file_name);
-                while ((c = fgetc(fp)) != EOF) { // standard C I/O file reading loop
-                    SSL_write(ssl, c, sizeof(c));
-                }
-                printf("File copy complete");
+                char r[64] = "Copying_file ";
+                strcat(r, file_name);
+                SSL_write(ssl, r, strlen(r));
+                // while ((c = getc(fp)) != EOF) { // standard C I/O file reading loop
+                //     printf("%d", c);
+                //     SSL_write(ssl, c, sizeof(c));
+                // }
+                fseek(fp, 0, SEEK_END);
+                int file_size = ftell(fp);
+                fseek(fp, 0, SEEK_SET);
+                unsigned char *c = malloc(file_size * sizeof(char));
+                fread(c, file_size, 1, fp);
+                SSL_write(ssl, c, file_size);
+                printf("File copy complete\n");
+                fclose(fp);
+                free(c);
             }
         }
 
