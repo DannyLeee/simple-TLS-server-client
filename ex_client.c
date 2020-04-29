@@ -12,15 +12,17 @@
 
 
 #define FAIL    -1
+
+// set the ca path here
 #define CA_CERT "ca.crt"
 
+// set the certificate path here
 // right certificate
-#define CLIENT_CERT "client.crt"
-#define CLIENT_KEY "client.key"
-
+#define RIGHT_CERT "client.crt"
+#define RIGHT_KEY "client.key"
 // wrong certificate
-// #define CLIENT_CERT "wrong.crt"
-// #define CLIENT_KEY "wrong.key"
+#define WRONG_CERT "wrong.crt"
+#define WRONG_KEY "wrong.key"
 
 int OpenConnection(const char *hostname, int port)
 {   
@@ -65,18 +67,18 @@ SSL_CTX* InitCTX(void)
 }
 
 // 配置 SSL context
-void configure_context(SSL_CTX *ctx)
+void configure_context(SSL_CTX *ctx, const char *cert, const char *key)
 {
     SSL_CTX_set_ecdh_auto(ctx, 1);  // 選擇橢圓曲線
 
     /* Set the key and cert */
-    if (SSL_CTX_use_certificate_file(ctx, CLIENT_CERT, SSL_FILETYPE_PEM) <= 0)
+    if (SSL_CTX_use_certificate_file(ctx, cert, SSL_FILETYPE_PEM) <= 0)
     {
         ERR_print_errors_fp(stderr);
 	    exit(EXIT_FAILURE);
     }
 
-    if (SSL_CTX_use_PrivateKey_file(ctx, CLIENT_KEY, SSL_FILETYPE_PEM) <= 0 )
+    if (SSL_CTX_use_PrivateKey_file(ctx, key, SSL_FILETYPE_PEM) <= 0 )
     {
         ERR_print_errors_fp(stderr);
 	    exit(EXIT_FAILURE);
@@ -116,11 +118,25 @@ int main(int argc, char *argv[])
     int bytes;
     char *hostname, *port;
 
-    if ( argc != 3 )
+    char * _CERT;
+    char * _KEY;
+    switch (argc)
     {
-        printf("usage: %s <hostname> <portnum>\n", argv[0]);
-        exit(0);
+    case 3:
+        _CERT = RIGHT_CERT;
+        _KEY =  RIGHT_KEY;
+        break;
+    case 4:
+        _CERT = (strcmp(argv[3], "wrong") == 0) ? WRONG_CERT : RIGHT_CERT;
+        _KEY = (strcmp(argv[3], "wrong") == 0) ? WRONG_KEY : RIGHT_KEY;
+        break;
+    default:
+        fprintf(stderr, "usage: %s <hostname> <portnum> [wrong]\n", argv[0]);
+        exit(EXIT_FAILURE);
+        break;
     }
+
+    // 初始化 openssl
     SSL_library_init();
     hostname = argv[1];
     port = argv[2];
@@ -128,8 +144,9 @@ int main(int argc, char *argv[])
     while (1)
     {
         ctx = InitCTX();
-        configure_context(ctx);
+        configure_context(ctx, _CERT, _KEY);
         server = OpenConnection(hostname, atoi(port));
+        
         ssl = SSL_new(ctx);      /* create new SSL connection state */
         SSL_set_verify_depth(ssl, 1);
         SSL_set_fd(ssl, server);    /* attach the socket descriptor */
@@ -145,7 +162,7 @@ int main(int argc, char *argv[])
         else
         {   
             char *msg;
-            printf("Verification success!!\n");
+            printf("Verification server success!!\n");
             printf("Connected with %s encryption\n", SSL_get_cipher(ssl));
             ShowCerts(ssl);        /* get any certificates */
 

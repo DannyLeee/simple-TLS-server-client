@@ -7,15 +7,16 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+// set the ca path here
 #define CA_CERT "ca.crt"
 
+// set the certificate path here
 // right certificate
-#define HOST_CERT "host.crt"
-#define HOST_KEY "host.key"
-
+#define RIGHT_CERT "host.crt"
+#define RIGHT_KEY "host.key"
 // wrong certificate
-// #define HOST_CERT "wrong.crt"
-// #define HOST_KEY "wrong.key"
+#define WRONG_CERT "wrong.crt"
+#define WRONG_KEY "wrong.key"
 
 int create_socket(int port)
 {
@@ -67,17 +68,17 @@ SSL_CTX *create_context()
 }
 
 // 配置 SSL context
-void configure_context(SSL_CTX *ctx)
+void configure_context(SSL_CTX *ctx, const char *cert, const char *key)
 {
     SSL_CTX_set_ecdh_auto(ctx, 1);  // 選擇橢圓曲線
 
     /* Set the key and cert */
-    if (SSL_CTX_use_certificate_file(ctx, HOST_CERT, SSL_FILETYPE_PEM) <= 0) {
+    if (SSL_CTX_use_certificate_file(ctx, cert, SSL_FILETYPE_PEM) <= 0) {
         ERR_print_errors_fp(stderr);
 	exit(EXIT_FAILURE);
     }
 
-    if (SSL_CTX_use_PrivateKey_file(ctx, HOST_KEY, SSL_FILETYPE_PEM) <= 0 ) {
+    if (SSL_CTX_use_PrivateKey_file(ctx, key, SSL_FILETYPE_PEM) <= 0 ) {
         ERR_print_errors_fp(stderr);
 	exit(EXIT_FAILURE);
     }
@@ -106,16 +107,34 @@ void ShowCerts(SSL* ssl)
         printf("Info: No client certificates configured.\n");
 }
 
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
     setvbuf(stdout, NULL, _IONBF, 0);   // 把 STDOUT buffer 拿掉
     int sock;
     SSL_CTX *ctx;
 
+    char * _CERT;
+    char * _KEY;
+    switch (argc)
+    {
+    case 1:
+        _CERT = RIGHT_CERT;
+        _KEY =  RIGHT_KEY;
+        break;
+    case 2:
+        _CERT = (strcmp(argv[1], "wrong") == 0) ? WRONG_CERT : RIGHT_CERT;
+        _KEY = (strcmp(argv[1], "wrong") == 0) ? WRONG_KEY : RIGHT_KEY;
+        break;
+    default:
+        fprintf(stderr, "wrong argument number\n");
+        exit(EXIT_FAILURE);
+        break;
+    }
+
     // 初始化 openssl
     SSL_library_init();
     ctx = create_context();
-    configure_context(ctx);
+    configure_context(ctx, _CERT, _KEY);
     sock = create_socket(8787);
 
     /* Handle connections */
@@ -154,16 +173,11 @@ int main(int argc, char **argv)
                 printf("Other connection error\n");
                 printf("Connection close\n");
             }
-            SSL_shutdown(ssl);
-            SSL_free(ssl);
-            close(client);
-            // exit(EXIT_FAILURE);
-            continue;
         }
         else
         {
             printf("get connect!!\n");
-            printf("Verification success!!\n");
+            printf("Verification client success!!\n");
             ShowCerts(ssl);        /* get any certificates */
 
             count = SSL_read(ssl, receive, sizeof(receive));
@@ -190,7 +204,7 @@ int main(int argc, char **argv)
                 {
                     perror("close failed!");
                     return -2;
-                }              
+                }
             }
             else if (strncmp(receive, "copy_file", 9) == 0)
             {
