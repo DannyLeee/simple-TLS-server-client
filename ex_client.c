@@ -54,8 +54,6 @@ SSL_CTX* InitCTX(void)
     const SSL_METHOD *method;
     SSL_CTX *ctx;
 
-    OpenSSL_add_all_algorithms();  /* Load cryptos, et.al. */ /***/
-    SSL_load_error_strings();   /* Bring in and register error messages */ /***/
     method = TLSv1_2_client_method();  /* Create new client-method instance */
     ctx = SSL_CTX_new(method);   /* Create new context */
     if ( ctx == NULL )
@@ -72,18 +70,19 @@ void configure_context(SSL_CTX *ctx)
     SSL_CTX_set_ecdh_auto(ctx, 1);  // 選擇橢圓曲線
 
     /* Set the key and cert */
-    if (SSL_CTX_use_certificate_file(ctx, CLIENT_CERT, SSL_FILETYPE_PEM) <= 0) {
+    if (SSL_CTX_use_certificate_file(ctx, CLIENT_CERT, SSL_FILETYPE_PEM) <= 0)
+    {
         ERR_print_errors_fp(stderr);
-	exit(EXIT_FAILURE);
+	    exit(EXIT_FAILURE);
     }
 
-    if (SSL_CTX_use_PrivateKey_file(ctx, CLIENT_KEY, SSL_FILETYPE_PEM) <= 0 ) {
+    if (SSL_CTX_use_PrivateKey_file(ctx, CLIENT_KEY, SSL_FILETYPE_PEM) <= 0 )
+    {
         ERR_print_errors_fp(stderr);
-	exit(EXIT_FAILURE);
+	    exit(EXIT_FAILURE);
     }
     SSL_CTX_load_verify_locations(ctx, CA_CERT, NULL);
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
-
 }
 
 void ShowCerts(SSL* ssl)

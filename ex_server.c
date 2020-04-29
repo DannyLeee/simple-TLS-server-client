@@ -27,35 +27,25 @@ int create_socket(int port)
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     s = socket(AF_INET, SOCK_STREAM, 0);
-    if (s < 0) {
-	perror("Unable to create socket");
-	exit(EXIT_FAILURE);
+    if (s < 0)
+    {
+	    perror("Unable to create socket");
+	    exit(EXIT_FAILURE);
     }
 
-    if (bind(s, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-	perror("Unable to bind");
-	exit(EXIT_FAILURE);
+    if (bind(s, (struct sockaddr*)&addr, sizeof(addr)) < 0)
+    {
+        perror("Unable to bind");
+        exit(EXIT_FAILURE);
     }
 
-    if (listen(s, 1) < 0) {
-	perror("Unable to listen");
-	exit(EXIT_FAILURE);
+    if (listen(s, 1) < 0)
+    {
+        perror("Unable to listen");
+        exit(EXIT_FAILURE);
     }
 
     return s;
-}
-
-
-// 初始化 openssl
-void init_openssl()
-{ 
-    SSL_load_error_strings();	
-    OpenSSL_add_ssl_algorithms();
-}
-
-void cleanup_openssl()
-{
-    EVP_cleanup();
 }
 
 // 創建 SSL context
@@ -123,12 +113,9 @@ int main(int argc, char **argv)
     SSL_CTX *ctx;
 
     // 初始化 openssl
-    // init_openssl();
     SSL_library_init();
     ctx = create_context();
-
     configure_context(ctx);
-
     sock = create_socket(8787);
 
     /* Handle connections */
@@ -143,7 +130,8 @@ int main(int argc, char **argv)
         FILE *fp;
 
         int client = accept(sock, (struct sockaddr*)&addr, &len);
-        if (client < 0) {
+        if (client < 0)
+        {
             perror("Unable to accept");
             exit(EXIT_FAILURE);
         }
@@ -154,32 +142,29 @@ int main(int argc, char **argv)
 
 
         // SSL_accept() 處理 TSL handshake
-        if (SSL_accept(ssl) <= 0) {
+        if (SSL_accept(ssl) <= 0)
+        {
             if (SSL_get_verify_result(ssl) != X509_V_OK)
             {
-                fprintf(stderr, "Client certificate verify error\n");
+                printf("Client certificate verify error\n");
                 printf("Connection close\n");
-                // exit(EXIT_FAILURE);
             }
             else
             {
-                fprintf(stderr, "Other connection error\n");
+                printf("Other connection error\n");
                 printf("Connection close\n");
             }
             SSL_shutdown(ssl);
             SSL_free(ssl);
             close(client);
-            exit(EXIT_FAILURE);
+            // exit(EXIT_FAILURE);
+            continue;
         }
-        else {
+        else
+        {
             printf("get connect!!\n");
             printf("Verification success!!\n");
             ShowCerts(ssl);        /* get any certificates */
-
-            // send to client
-            // printf("Send some to client: ");
-            // scanf("%s", reply);
-            // SSL_write(ssl, reply, strlen(reply));   // 送出訊息
 
             count = SSL_read(ssl, receive, sizeof(receive));
             receive[count] = 0;
@@ -198,7 +183,6 @@ int main(int argc, char **argv)
                 char buf[256];
                 while (fgets(buf, 255, fp) != NULL)
                 {
-                    // printf("%s", buf);
                     SSL_write(ssl, buf, strlen(buf));
                 }
                 printf("ls done\n");
@@ -218,21 +202,16 @@ int main(int argc, char **argv)
                     perror("File opening failed");
                     return -1;
                 }
-                // unsigned char *c;
                 printf("Copying file: %s ... ...\n", file_name);
                 char r[64] = "Copying_file ";
                 strcat(r, file_name);
-                SSL_write(ssl, r, strlen(r));
-                // while ((c = getc(fp)) != EOF) { // standard C I/O file reading loop
-                //     printf("%d", c);
-                //     SSL_write(ssl, c, sizeof(c));
-                // }
+                SSL_write(ssl, r, strlen(r));   // write state to client
                 fseek(fp, 0, SEEK_END);
                 int file_size = ftell(fp);
                 fseek(fp, 0, SEEK_SET);
                 unsigned char *c = malloc(file_size * sizeof(char));
                 fread(c, file_size, 1, fp);
-                SSL_write(ssl, c, file_size);
+                SSL_write(ssl, c, file_size);   // write whole file to client
                 printf("File copy complete\n");
                 fclose(fp);
                 free(c);
@@ -246,5 +225,4 @@ int main(int argc, char **argv)
 
     close(sock);
     SSL_CTX_free(ctx);
-    cleanup_openssl();/****/
 }
