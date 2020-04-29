@@ -1,8 +1,8 @@
-all: ex_server ex_client
+all: server client
 
 args = -lssl -lcrypto
-ex_server: ex_server.c
-	gcc -o ex_server ex_server.c $(args)
+server: server.c
+	gcc -o server server.c initial.c $(args)
 
-ex_client: ex_client.c
-	gcc -o ex_client ex_client.c $(args)
+client: client.c
+	gcc -o client client.c initial.c $(args)
