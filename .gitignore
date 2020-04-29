@@ -6,3 +6,4 @@ client
 *.csr
 ca*
 .vscode/
+*.pdf
